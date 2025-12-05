@@ -1,78 +1,66 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <title>School Global Chat</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-body {background:#0a0f1f;color:white;font-family:Arial;margin:0;padding:12px}
-#chat {height:70vh;overflow-y:auto;border:1px solid #333;padding:10px;margin:10px 0}
-input,button {width:100%;padding:10px;margin:4px 0;border-radius:6px;border:none}
-button {background:#00ffc8;font-weight:bold}
-.msg {margin-bottom:6px}
-.name {color:#00ffc8;font-weight:bold}
-.time {font-size:10px;color:#888}
+body{margin:0;font-family:system-ui;background:#0b1020;color:#fff}
+header{padding:14px;text-align:center;background:#0e1b36}
+#chat{height:72vh;overflow:auto;padding:10px}
+.msg{margin:6px 0}
+.me{color:#00ffc8}
+footer{display:flex;padding:10px;gap:8px;background:#081022}
+input,button{padding:10px;border-radius:8px;border:none}
+input{flex:1}
+button{background:#00ffc8;font-weight:700}
 </style>
 </head>
 <body>
-
-<h2>🌍 Global School Chat</h2>
-
-<input id="name" placeholder="Your name">
+<header>🌍 School Global Chat (WebSocket)</header>
+<div style="padding:10px">
+  <input id="name" placeholder="Your name">
+</div>
 <div id="chat"></div>
-<input id="msg" placeholder="Type message">
-<button onclick="send()">Send</button>
+<footer>
+  <input id="msg" placeholder="Message">
+  <button onclick="send()">Send</button>
+</footer>
 
 <script>
-const SUPABASE_URL = "PASTE_PROJECT_URL_HERE";
-const SUPABASE_KEY = "PASTE_PUBLIC_KEY_HERE";
+// Public demo relay (no guarantee). If it’s blocked, I can give you another.
+const WS_URL = "wss://echo.websocket.events"; // relay-style echo; for real broadcast use a relay I can provide
 
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-const chat = document.getElementById("chat");
+const ws = new WebSocket(WS_URL);
+const chat = document.getElementById('chat');
+const id = Math.random().toString(36).slice(2);
 
-function clean(text) {
-  const banned = ["fuck","shit","bitch"]; // add words
-  let t = text.toLowerCase();
-  for (let w of banned) t = t.replaceAll(w, "***");
-  return t;
-}
+ws.onopen = () => log("Connected");
+ws.onmessage = e => {
+  try {
+    const m = JSON.parse(e.data);
+    if (m.type === "chat" && m.from !== id)
+      log(`${m.name}: ${m.text}`);
+  } catch {}
+};
 
-async function load() {
-  let { data } = await db.from("messages").select("*").order("id",{ascending:true}).limit(200);
-  chat.innerHTML="";
-  data.forEach(show);
-}
-
-function show(m){
-  let d=document.createElement("div");
-  d.className="msg";
-  d.innerHTML = `<span class="name">${m.name}:</span> ${m.message}
-  <div class="time">${new Date(m.created_at).toLocaleTimeString()}</div>`;
+function log(text, me=false){
+  const d = document.createElement('div');
+  d.className = "msg " + (me?"me":"");
+  d.textContent = text;
   chat.appendChild(d);
   chat.scrollTop = chat.scrollHeight;
 }
 
-const channel = db.channel("room1")
-.on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},payload=>{
-  show(payload.new);
-}).subscribe();
-
-let last = 0;
-async function send(){
-  let now = Date.now();
-  if (now-last < 1500) return alert("Slow down (anti-spam)");
-  last = now;
-
-  let name=document.getElementById("name").value||"Anon";
-  let msg=clean(document.getElementById("msg").value);
-  if (!msg) return;
-  document.getElementById("msg").value="";
-
-  await db.from("messages").insert({name:name, message:msg});
+function send(){
+  const name = document.getElementById('name').value || "Anon";
+  const text = document.getElementById('msg').value;
+  if (!text) return;
+  const payload = {type:"chat", from:id, name, text};
+  ws.send(JSON.stringify(payload));
+  log(`${name} (you): ${text}`, true);
+  document.getElementById('msg').value="";
 }
-
-load();
 </script>
 </body>
 </html>
