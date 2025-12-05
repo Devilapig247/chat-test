@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>School Global Chat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+body {background:#0a0f1f;color:white;font-family:Arial;margin:0;padding:12px}
+#chat {height:70vh;overflow-y:auto;border:1px solid #333;padding:10px;margin:10px 0}
+input,button {width:100%;padding:10px;margin:4px 0;border-radius:6px;border:none}
+button {background:#00ffc8;font-weight:bold}
+.msg {margin-bottom:6px}
+.name {color:#00ffc8;font-weight:bold}
+.time {font-size:10px;color:#888}
+</style>
+</head>
+<body>
+
+<h2>🌍 Global School Chat</h2>
+
+<input id="name" placeholder="Your name">
+<div id="chat"></div>
+<input id="msg" placeholder="Type message">
+<button onclick="send()">Send</button>
+
+<script>
+const SUPABASE_URL = "PASTE_PROJECT_URL_HERE";
+const SUPABASE_KEY = "PASTE_PUBLIC_KEY_HERE";
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const chat = document.getElementById("chat");
+
+function clean(text) {
+  const banned = ["fuck","shit","bitch"]; // add words
+  let t = text.toLowerCase();
+  for (let w of banned) t = t.replaceAll(w, "***");
+  return t;
+}
+
+async function load() {
+  let { data } = await db.from("messages").select("*").order("id",{ascending:true}).limit(200);
+  chat.innerHTML="";
+  data.forEach(show);
+}
+
+function show(m){
+  let d=document.createElement("div");
+  d.className="msg";
+  d.innerHTML = `<span class="name">${m.name}:</span> ${m.message}
+  <div class="time">${new Date(m.created_at).toLocaleTimeString()}</div>`;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+const channel = db.channel("room1")
+.on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},payload=>{
+  show(payload.new);
+}).subscribe();
+
+let last = 0;
+async function send(){
+  let now = Date.now();
+  if (now-last < 1500) return alert("Slow down (anti-spam)");
+  last = now;
+
+  let name=document.getElementById("name").value||"Anon";
+  let msg=clean(document.getElementById("msg").value);
+  if (!msg) return;
+  document.getElementById("msg").value="";
+
+  await db.from("messages").insert({name:name, message:msg});
+}
+
+load();
+</script>
+</body>
+</html>
